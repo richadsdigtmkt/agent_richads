@@ -78,10 +78,10 @@ def accounts(request: Request):
         ids = client.list_accessible_customers()
     except AdsApiError as e:
         return page(f"<h1>Error de acceso</h1><p>{escape(e.code)}</p>")
-    options = "".join(f"<option value='{i}'>{i[:3]}-{i[3:6]}-{i[6:]}</option>" for i in ids)
+    options = "".join(f"<option value='{i}'>" for i in ids)
     return page(f"""<h1>Elige la cuenta y cuéntanos tu negocio</h1>
 <form method="post" action="/informe">
-<label>Cuenta <select name="customer_id">{options}</select></label>
+<label>ID de la cuenta (10 cifras) <input name="customer_id" list="cuentas" required><datalist id="cuentas">{options}</datalist></label>
 <label>Tipo de negocio <select name="business_type"><option value="leads">Captación de contactos</option>
 <option value="ecommerce">Tienda online</option><option value="mixto">Mixto</option></select></label>
 <label>Ticket medio o valor de un cliente <input name="avg_ticket" type="number" step="any"></label>
