@@ -93,6 +93,7 @@ class AccountData:
     conversion_actions: list[ConversionAction] | None = None  # None = no leído
     profile: Profile = field(default_factory=Profile)
     search_terms_capped: bool = False
+    skipped_queries: list[str] = field(default_factory=list)
 
     @property
     def active_or_spending(self) -> list[Campaign]:

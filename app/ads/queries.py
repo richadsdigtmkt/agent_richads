@@ -6,9 +6,7 @@ Si un campo cambia de nombre entre versiones, se corrige aquí y en loader.py.
 
 # Todas las campañas no eliminadas, sin métricas: sirve para la higiene (activas vs pausadas).
 CAMPAIGNS_BASE = """
-SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type,
-       campaign.start_date, campaign.bidding_strategy_type,
-       campaign.contains_eu_political_advertising
+SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type
 FROM campaign
 WHERE campaign.status != 'REMOVED'
 """
@@ -16,8 +14,7 @@ WHERE campaign.status != 'REMOVED'
 # Métricas por campaña en una ventana. Las filas sin actividad no vuelven, que es lo que queremos.
 CAMPAIGN_METRICS = """
 SELECT campaign.id, metrics.impressions, metrics.clicks, metrics.cost_micros,
-       metrics.conversions, metrics.conversions_value,
-       metrics.search_budget_lost_impression_share, metrics.search_rank_lost_impression_share
+       metrics.conversions, metrics.conversions_value
 FROM campaign
 WHERE segments.date DURING {window} AND campaign.status != 'REMOVED'
 """
@@ -51,4 +48,24 @@ CUSTOMER = """
 SELECT customer.id, customer.descriptive_name, customer.currency_code
 FROM customer
 LIMIT 1
+"""
+
+# Campos opcionales de campaña: cada uno se pide aparte para que un nombre cambiado entre versiones
+# de la API no tumbe el informe. (campo GAQL, clave JSON, atributo de Campaign, tipo)
+CAMPAIGN_OPTIONAL_FIELDS = [
+    ("campaign.start_date_time", "startDateTime", "start_date", "date"),
+    ("campaign.start_date", "startDate", "start_date", "date"),
+    ("campaign.bidding_strategy_type", "biddingStrategyType", "bidding_strategy", "str"),
+    ("campaign.contains_eu_political_advertising", "containsEuPoliticalAdvertising", "eu_political", "str"),
+]
+CAMPAIGN_OPTIONAL = """
+SELECT campaign.id, {field}
+FROM campaign
+WHERE campaign.status != 'REMOVED'
+"""
+
+IMPRESSION_SHARE = """
+SELECT campaign.id, metrics.search_budget_lost_impression_share, metrics.search_rank_lost_impression_share
+FROM campaign
+WHERE segments.date DURING {window} AND campaign.advertising_channel_type = 'SEARCH'
 """

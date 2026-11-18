@@ -83,10 +83,14 @@ class AdsClient:
                 err = err[0]
             details = err["error"].get("details", [{}])
             code = "UNKNOWN"
+            msgs = []
             for d in details:
                 for e in d.get("errors", []):
                     code = next(iter(e.get("errorCode", {}).values()), code)
-            raise AdsApiError(r.status_code, code, err["error"].get("message", ""))
+                    msgs.append(e.get("message", ""))
+            message = " | ".join(m for m in msgs if m) or err["error"].get("message", "")
+            print(f"[Google Ads API] {r.status_code} {code}: {message}", flush=True)
+            raise AdsApiError(r.status_code, code, message)
         except (ValueError, KeyError, IndexError, TypeError):
             raise AdsApiError(r.status_code, "UNKNOWN", r.text[:300])
 

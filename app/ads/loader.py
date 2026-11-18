@@ -50,10 +50,22 @@ def load_account(client: AdsClient, customer_id: str, profile: Profile | None = 
             name=_get(r, "campaign.name", ""),
             status=_get(r, "campaign.status", ""),
             channel=_get(r, "campaign.advertisingChannelType", ""),
-            start_date=_date(_get(r, "campaign.startDate")),
-            bidding_strategy=_get(r, "campaign.biddingStrategyType"),
-            eu_political=_get(r, "campaign.containsEuPoliticalAdvertising"),
         )
+
+    skipped: list[str] = []
+    for field, key, attr, kind in queries.CAMPAIGN_OPTIONAL_FIELDS:
+        if attr == "start_date" and any(c.start_date for c in campaigns.values()):
+            continue
+        try:
+            rows = client.search(customer_id, queries.CAMPAIGN_OPTIONAL.format(field=field))
+        except AdsApiError:
+            skipped.append(field)
+            continue
+        for r in rows:
+            c = campaigns.get(str(_get(r, "campaign.id")))
+            if c:
+                v = _get(r, f"campaign.{key}")
+                setattr(c, attr, _date(v) if kind == "date" else v)
 
     for r in client.search(customer_id, queries.CAMPAIGN_METRICS.format(window="LAST_30_DAYS")):
         c = campaigns.get(str(_get(r, "campaign.id")))
@@ -64,10 +76,17 @@ def load_account(client: AdsClient, customer_id: str, profile: Profile | None = 
         c.cost = _num(_get(r, "metrics.costMicros")) / MICROS
         c.conversions = _num(_get(r, "metrics.conversions"))
         c.conv_value = _num(_get(r, "metrics.conversionsValue"))
-        bl = _get(r, "metrics.searchBudgetLostImpressionShare")
-        rl = _get(r, "metrics.searchRankLostImpressionShare")
-        c.budget_lost_is = _num(bl, None) if bl is not None else None
-        c.rank_lost_is = _num(rl, None) if rl is not None else None
+
+    try:
+        for r in client.search(customer_id, queries.IMPRESSION_SHARE.format(window="LAST_30_DAYS")):
+            c = campaigns.get(str(_get(r, "campaign.id")))
+            if c:
+                bl = _get(r, "metrics.searchBudgetLostImpressionShare")
+                rl = _get(r, "metrics.searchRankLostImpressionShare")
+                c.budget_lost_is = _num(bl, None) if bl is not None else None
+                c.rank_lost_is = _num(rl, None) if rl is not None else None
+    except AdsApiError:
+        skipped.append("impression_share")
 
     for c in campaigns.values():
         c.cost_7d = 0.0
@@ -77,6 +96,13 @@ def load_account(client: AdsClient, customer_id: str, profile: Profile | None = 
         if c:
             c.cost_7d = _num(_get(r, "metrics.costMicros")) / MICROS
             c.conversions_7d = _num(_get(r, "metrics.conversions"))
+
+    def _safe(query: str, name: str) -> list[dict]:
+        try:
+            return client.search(customer_id, query)
+        except AdsApiError:
+            skipped.append(name)
+            return []
 
     keywords = [
         Keyword(
@@ -90,10 +116,10 @@ def load_account(client: AdsClient, customer_id: str, profile: Profile | None = 
             cost=_num(_get(r, "metrics.costMicros")) / MICROS,
             conversions=_num(_get(r, "metrics.conversions")),
         )
-        for r in client.search(customer_id, queries.KEYWORDS.format(window="LAST_30_DAYS"))
+        for r in _safe(queries.KEYWORDS.format(window="LAST_30_DAYS"), "keywords")
     ]
 
-    terms_rows = client.search(customer_id, queries.SEARCH_TERMS.format(window="LAST_30_DAYS"))
+    terms_rows = _safe(queries.SEARCH_TERMS.format(window="LAST_30_DAYS"), "search_terms")
     terms = [
         SearchTerm(
             campaign=_get(r, "campaign.name", ""),
@@ -134,4 +160,5 @@ def load_account(client: AdsClient, customer_id: str, profile: Profile | None = 
         conversion_actions=actions,
         profile=profile or Profile(),
         search_terms_capped=len(terms_rows) >= 2000,
+        skipped_queries=skipped,
     )

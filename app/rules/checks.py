@@ -519,6 +519,10 @@ def not_observed(d: AccountData) -> list[NotObserved]:
         items.append(NotObserved("4e", "Configuración de las acciones de conversión", "no se pudieron leer"))
     if all(c.bidding_strategy is None for c in d.campaigns):
         items.append(NotObserved("1c", "Estrategia de puja por campaña", "no viene en los datos"))
+    if "keywords" in d.skipped_queries:
+        items.append(NotObserved("3", "Quality Score de las palabras clave", "la consulta falló"))
+    if "search_terms" in d.skipped_queries:
+        items.append(NotObserved("8", "Términos de búsqueda", "la consulta falló"))
     if d.search_terms_capped:
         items.append(NotObserved("8e", "Términos de búsqueda completos", "el informe viene limitado"))
     if not any(c.channel in ("SEARCH", "SHOPPING") and c.impressions > 0 for c in d.campaigns):
