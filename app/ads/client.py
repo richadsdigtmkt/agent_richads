@@ -69,7 +69,10 @@ class AdsClient:
         }
         if settings.developer_token:
             self.headers["developer-token"] = settings.developer_token
-        lcid = login_customer_id or settings.login_customer_id
+        self.access_token = access_token
+        # None = usar la MCC de config; "" = sin cabecera (acceso directo a la cuenta)
+        lcid = settings.login_customer_id if login_customer_id is None else login_customer_id
+        self.login_customer_id = lcid
         if lcid:
             self.headers["login-customer-id"] = lcid.replace("-", "")
 

@@ -94,6 +94,29 @@ def accounts(request: Request):
 <p><button class="btn" type="submit">Ver diagnóstico gratuito</button></p></form>""")
 
 
+def _load_with_fallback(client: AdsClient, customer_id: str, profile: Profile):
+    """Prueba la MCC configurada, luego acceso directo y luego cada cuenta accesible como administradora."""
+    try:
+        return load_account(client, customer_id, profile)
+    except AdsApiError as e:
+        if e.code != "USER_PERMISSION_DENIED":
+            raise
+        last = e
+    candidates = [""]
+    try:
+        candidates += [i for i in client.list_accessible_customers() if i != client.login_customer_id]
+    except AdsApiError:
+        pass
+    for lcid in candidates:
+        try:
+            return load_account(AdsClient(client.access_token, login_customer_id=lcid), customer_id, profile)
+        except AdsApiError as e:
+            if e.code not in ("USER_PERMISSION_DENIED", "CUSTOMER_NOT_FOUND"):
+                raise
+            last = e
+    raise last
+
+
 @app.post("/informe", response_class=HTMLResponse)
 def report(
     request: Request,
@@ -117,9 +140,11 @@ def report(
         brand_terms=[t.strip() for t in brand_terms.split(",") if t.strip()],
     )
     try:
-        data = load_account(client, customer_id, profile)
+        data = _load_with_fallback(client, customer_id, profile)
     except AdsApiError as e:
-        return page(f"<h1>No se pudo leer la cuenta</h1><p>{escape(e.code)}: {escape(e.message)}</p>")
+        return page(f"<h1>No se pudo leer la cuenta</h1><p>{escape(e.code)}: {escape(e.message)}</p>"
+                    "<p class='muted'>Se ha probado el acceso directo y a través de cada cuenta de administrador "
+                    "accesible. Comprueba que has entrado con una cuenta de Google que tenga acceso a ese ID.</p>")
     r = build_free_report(run_rules(data))
     areas = "".join(
         f"<h3>{escape(a)}</h3><ul>" + "".join(f"<li><span class='sev'>{escape(s)}</span>{escape(t)}</li>" for s, t in items) + "</ul>"
